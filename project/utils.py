@@ -1,10 +1,10 @@
 import collections
 import itertools
 import aiohttp
+import asyncio
 from collections import defaultdict
 from math import radians, cos, sin, asin, sqrt
 from project.db.models import ModelHelper
-
 
 class DistanceCalculator:
     def __init__(self, zip_codes, conn):
@@ -21,12 +21,14 @@ class DistanceCalculator:
         return data
 
     async def ref_points(self):
-        distance_list = await self._get_distance_list()
+        coordinates = collections.namedtuple("Coordinates", "zip_code lat long")
+        coordinate_list = [coordinates(zip_code=data.zip_code, lat=float(data.lat), long=float(data.long)) async for
+                           data in self._get_zip_coords()]
+        loop = asyncio.get_event_loop()
+        distance_list = await loop.run_in_executor(None,self._get_distance_list, coordinate_list)
         return self._calc_furthest_points(distance_list)
 
-    async def _get_distance_list(self):
-        coordinates = collections.namedtuple("Coordinates", "zip_code lat long")
-        coordinate_list = [coordinates(zip_code=data.zip_code, lat=float(data.lat), long=float(data.long)) async for data in self._get_zip_coords()]
+    def _get_distance_list(self, coordinate_list):
         coords = itertools.combinations(coordinate_list, 2)
         distance_diffs = [self.calc_dist(coord[0], coord[1]) for coord in coords]
         return self._get_distances(distance_diffs)
@@ -40,7 +42,8 @@ class DistanceCalculator:
         for zip_code in self._zip_codes:
             coords = await self._model_helper.execute(f"SELECT * FROM public.zip_codes WHERE zip_code =CAST({zip_code} AS VARCHAR)")
             for coord in coords:
-                yield coord
+                if coord:
+                    yield coord
 
     def calc_dist(self, coord_1, coord_2):
         """
@@ -73,16 +76,6 @@ class CenterLocator:
             return self._calculate_center()
         elif coord_length == 1:
             return self._coordinate_list[0]
-
-
-    # def find_center(self):
-    #     coord_length = len(self._coordinate_list)
-    #     if  coord_length == 3 or coord_length == 2:
-    #         return self._calculate_center(constant=3)
-    #     elif coord_length == 2:
-    #         return self._calculate_center()
-    #     else:
-    #         return self._coordinate_list[0]
 
     def _calculate_center(self):
         lat_average = sum(point.lat for point in self._coordinate_list) / len(self._coordinate_list)
