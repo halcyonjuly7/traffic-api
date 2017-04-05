@@ -1,29 +1,14 @@
 from sanic import Sanic
+import aiohttp
 from .utils import DistanceCalculator, QueryHandler, CenterLocator
-from sanic.response import json
+from sanic.response import json, raw
 
 
 app = Sanic(__name__)
 app.config.from_pyfile("config/dev.py")
 connection = f"postgres://{app.config['DB_USERNAME']}:{app.config['DB_PASSWD']}@{app.config['DB_HOSTADDR']}/nearest"
-
-
-# @app.listener("before_server_start")
-# async def prep_db(app, loop):
-#     async with create_engine(connection) as engine:
-#         async with engine.acquire() as conn:
-#             await conn.execute("CREATE TABLE IF NOT EXISTS zip_codes ("
-#                                  "id SERIAL PRIMARY KEY,"
-#                                  "zip_code VARCHAR(50),"
-#                                  "lat FLOAT,"
-#                                  "long FLOAT);")
-#             # if not zip_table.exists():
-#             import csv
-#             with open("gps_coordinates.csv") as coordinates:
-#                 for row in csv.DictReader(coordinates):
-#                     await conn.execute(zip_table.insert().values(**row))
-
-
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 @app.route("/nearest")
 async def get_data(request):
@@ -33,7 +18,21 @@ async def get_data(request):
     dist_calc = DistanceCalculator(zip_codes, connection)
     ref_points = await dist_calc.ref_points()
     center_locator = CenterLocator(ref_points)
-    return json({"closest":center_locator.find_center()})
+    places = await get_places(center_locator.find_center(), keyword, radius)
+    return json(places)
+
+@app.route("/photo")
+async def get_photos(request):
+    place_id = request.args.get("place_id")
+    logging.debug(place_id)
+    max_width = request.args.get("max_width", 800)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(app.config["PICTURES_URL"], params={"photoreference":place_id, "key":app.config["API_KEY"], "maxwidth":max_width}) as resp:
+            resp_data = await resp.read()
+            return raw(resp_data)
+        # async with session.get(app.config["PICTURES_URL"].format(place_id, app.config["API_KEY"], max_width)) as resp:
+        #     resp_data = await resp.read()
+        #     return raw(resp_data)
 
 
 async def get_places(coords, keyword, radius):

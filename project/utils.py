@@ -3,6 +3,8 @@ import itertools
 import aiohttp
 import asyncio
 from collections import defaultdict
+import logging
+logging.basicConfig(level=logging.DEBUG)
 from math import radians, cos, sin, asin, sqrt
 from project.db.models import ModelHelper
 
@@ -25,8 +27,10 @@ class DistanceCalculator:
         coordinate_list = [coordinates(zip_code=data.zip_code, lat=float(data.lat), long=float(data.long)) async for
                            data in self._get_zip_coords()]
         loop = asyncio.get_event_loop()
-        distance_list = await loop.run_in_executor(None,self._get_distance_list, coordinate_list)
-        return self._calc_furthest_points(distance_list)
+        if len(coordinate_list) > 1:
+            distance_list = await loop.run_in_executor(None,self._get_distance_list, coordinate_list)
+            return self._calc_furthest_points(distance_list)
+        return coordinate_list
 
     def _get_distance_list(self, coordinate_list):
         coords = itertools.combinations(coordinate_list, 2)
@@ -71,11 +75,14 @@ class CenterLocator:
 
 
     def find_center(self):
+
         coord_length = len(self._coordinate_list)
+        logging.debug(f"this is the length of the coordinate list {coord_length}")
         if  coord_length == 3 or coord_length == 2:
             return self._calculate_center()
         elif coord_length == 1:
-            return self._coordinate_list[0]
+            zip_coords = self._coordinate_list[0]
+            return self._coordinates(lat=zip_coords.lat, long=zip_coords.long)
 
     def _calculate_center(self):
         lat_average = sum(point.lat for point in self._coordinate_list) / len(self._coordinate_list)
@@ -88,4 +95,4 @@ class QueryHandler:
     async def get(url, **kwargs):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=kwargs) as resp:
-                return await resp.text()
+                return await resp.json()
