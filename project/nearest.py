@@ -1,16 +1,17 @@
-from sanic import Sanic
 import aiohttp
+import logging
+
+from sanic import Sanic
 from .utils import DistanceCalculator, QueryHandler, CenterLocator
 from sanic.response import json, raw
 from sanic_cors import CORS, cross_origin
-
 
 app = Sanic(__name__)
 CORS(app)
 app.config.from_pyfile("project/config/dev.py")
 connection = f"postgres://{app.config['DB_USERNAME']}:{app.config['DB_PASSWD']}@{app.config['DB_HOSTADDR']}/nearest"
-import logging
-logging.basicConfig(level=logging.DEBUG)
+
+logger = logging.getLogger("sanic_logger")
 
 @app.route("/nearest")
 @cross_origin
@@ -20,8 +21,9 @@ async def get_data(request):
     keyword=request.args.get("type", "restaurant")
     dist_calc = DistanceCalculator(zip_codes, connection)
     ref_points = await dist_calc.ref_points()
-    center_locator = CenterLocator(ref_points)
-    places = await get_places(center_locator.find_center(), keyword, radius)
+    center_point = CenterLocator(ref_points).find_center()
+    logger.info(f"Center point for {zip_codes} is {center_point}")
+    places = await get_places(center_point, keyword, radius)
     return json(places)
 
 @app.route("/photo")

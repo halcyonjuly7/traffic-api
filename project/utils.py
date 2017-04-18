@@ -75,9 +75,8 @@ class CenterLocator:
 
 
     def find_center(self):
-
         coord_length = len(self._coordinate_list)
-        logging.debug(f"this is the length of the coordinate list {coord_length}")
+        logging.info(f"this is the length of the coordinate list {coord_length}")
         if  coord_length == 3 or coord_length == 2:
             return self._calculate_center()
         elif coord_length == 1:
