@@ -2,9 +2,8 @@ import collections
 import itertools
 import aiohttp
 import asyncio
+import psycopg2
 from collections import defaultdict
-import logging
-logging.basicConfig(level=logging.DEBUG)
 from math import radians, cos, sin, asin, sqrt
 from project.db.models import ModelHelper
 
@@ -22,10 +21,10 @@ class DistanceCalculator:
                 data[dist].add(dist_diff)
         return data
 
-    async def ref_points(self):
+    async def ref_points(self, zip_coords):
         coordinates = collections.namedtuple("Coordinates", "zip_code lat long")
-        coordinate_list = [coordinates(zip_code=data.zip_code, lat=float(data.lat), long=float(data.long)) async for
-                           data in self._get_zip_coords()]
+        coordinate_list = [coordinates(zip_code=data.zip_code, lat=float(data.lat), long=float(data.long)) for
+                           data in zip_coords]
         loop = asyncio.get_event_loop()
         if len(coordinate_list) > 1:
             distance_list = await loop.run_in_executor(None,self._get_distance_list, coordinate_list)
@@ -41,13 +40,24 @@ class DistanceCalculator:
         average_distance = lambda key: sum(distances[key]) / len(distances[key])
         return sorted(distances.keys(), key=average_distance, reverse=True)[:3] # top 3 furthest points
 
+    # async def _get_zip_coords(self):
+    #     coords = await self._model_helper.execute(f"SELECT * FROM public.zip_codes WHERE public.zip_code::varchar IN ({','.join(self._zip_codes)})")
+    #     for coord in coords:
+    #         if coord:
+    #             yield coord
 
-    async def _get_zip_coords(self):
+
+    async def get_zip_coords(self):
+        zip_codes = []
         for zip_code in self._zip_codes:
-            coords = await self._model_helper.execute(f"SELECT * FROM public.zip_codes WHERE zip_code =CAST({zip_code} AS VARCHAR)")
-            for coord in coords:
-                if coord:
-                    yield coord
+            try:
+                coords = await self._model_helper.execute(f"SELECT * FROM public.zip_codes WHERE zip_code =CAST({zip_code} AS VARCHAR)")
+                for coord in coords:
+                    if coord:
+                        zip_codes.append(coord)
+            except psycopg2.ProgrammingError:
+                pass
+        return zip_codes
 
     def calc_dist(self, coord_1, coord_2):
         """
@@ -76,7 +86,6 @@ class CenterLocator:
 
     def find_center(self):
         coord_length = len(self._coordinate_list)
-        logging.info(f"this is the length of the coordinate list {coord_length}")
         if  coord_length == 3 or coord_length == 2:
             return self._calculate_center()
         elif coord_length == 1:

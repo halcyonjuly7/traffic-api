@@ -13,21 +13,27 @@ connection = f"postgres://{app.config['DB_USERNAME']}:{app.config['DB_PASSWD']}@
 
 logger = logging.getLogger("sanic_logger")
 
+
 @app.route("/nearest")
-@cross_origin
 async def get_data(request):
     zip_codes = [zip_code.strip().zfill(5) for zip_code in request.args.get("zip_codes").split(",")]
     radius = request.args.get("radius", 5000)
     keyword=request.args.get("type", "restaurant")
-    dist_calc = DistanceCalculator(zip_codes, connection)
-    ref_points = await dist_calc.ref_points()
+    dist_calc = DistanceCalculator(zip_codes[:10], connection)
+    zip_coords = await dist_calc.get_zip_coords()
+    ref_points = await dist_calc.ref_points(zip_coords)
     center_point = CenterLocator(ref_points).find_center()
-    logger.info(f"Center point for {zip_codes} is {center_point}")
-    places = await get_places(center_point, keyword, radius)
-    return json(places)
+    if center_point:
+        logger.info(f"Center point for {zip_codes} is {center_point}")
+        places = await get_places(center_point, keyword, radius)
+        return json({"data": places,
+                     "zip_coords":[{"zip_code":zip_coord.zip_code,
+                                    "lat": zip_coord.lat,
+                                    "long": zip_coord.long} for zip_coord in zip_coords]})
+    return json({"data": None})
+
 
 @app.route("/photo")
-@cross_origin
 async def get_photos(request):
     place_id = request.args.get("place_id")
     logging.debug(place_id)
