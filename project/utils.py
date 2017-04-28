@@ -33,7 +33,7 @@ class DistanceCalculator:
 
     def _get_distance_list(self, coordinate_list):
         coords = itertools.combinations(coordinate_list, 2)
-        distance_diffs = [self.calc_dist(coord[0], coord[1]) for coord in coords]
+        distance_diffs = [self._calc_dist(coord[0], coord[1]) for coord in coords]
         return self._get_distances(distance_diffs)
 
     def _calc_furthest_points(self, distances):
@@ -59,7 +59,7 @@ class DistanceCalculator:
                 pass
         return zip_codes
 
-    def calc_dist(self, coord_1, coord_2):
+    def _calc_dist(self, coord_1, coord_2):
         """
            Calculate the great circle distance between two points
            on the earth (specified in decimal degrees)

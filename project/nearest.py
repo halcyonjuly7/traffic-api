@@ -5,10 +5,13 @@ from sanic import Sanic
 from .utils import DistanceCalculator, QueryHandler, CenterLocator
 from sanic.response import json, raw
 from sanic_cors import CORS, cross_origin
+import os
+
+config = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "dev.py")
 
 app = Sanic(__name__)
 CORS(app)
-app.config.from_pyfile("project/config/dev.py")
+app.config.from_pyfile(config)
 connection = f"postgres://{app.config['DB_USERNAME']}:{app.config['DB_PASSWD']}@{app.config['DB_HOSTADDR']}/nearest"
 
 logger = logging.getLogger("sanic_logger")
@@ -19,6 +22,7 @@ async def get_data(request):
     zip_codes = [zip_code.strip().zfill(5) for zip_code in request.args.get("zip_codes").split(",")]
     radius = request.args.get("radius", 5000)
     keyword=request.args.get("type", "restaurant")
+    logger.info(f"keyword: {keyword}")
     dist_calc = DistanceCalculator(zip_codes[:10], connection)
     zip_coords = await dist_calc.get_zip_coords()
     ref_points = await dist_calc.ref_points(zip_coords)
@@ -30,14 +34,15 @@ async def get_data(request):
                      "zip_coords":[{"zip_code":zip_coord.zip_code,
                                     "lat": zip_coord.lat,
                                     "long": zip_coord.long} for zip_coord in zip_coords]})
-    return json({"data": None})
+    return json({"data": None,
+                 "zip_coords": None})
 
 
 @app.route("/photo")
 async def get_photos(request):
     place_id = request.args.get("place_id")
     logging.debug(place_id)
-    max_width = request.args.get("max_width", 800)
+    max_width = request.args.get("max_width", 1600)
     async with aiohttp.ClientSession() as session:
         async with session.get(app.config["PICTURES_URL"], params={"photoreference":place_id, "key":app.config["API_KEY"], "maxwidth":max_width}) as resp:
             resp_data = await resp.read()
