@@ -37,24 +37,38 @@ async def get_data(request):
     return json({"data": None,
                  "zip_coords": None})
 
+@app.route("/nearest/next_page", methods=["GET"])
+async def get_next(request):
+    params = dict(key=app.config["API_KEY"],
+                  page_token=request.args.get("page_token"))
+    results = await QueryHandler.get(app.config['PLACES_URL'],params=params)
+    return json(results)
+
 
 @app.route("/photo")
 async def get_photos(request):
-    place_id = request.args.get("place_id")
-    logging.debug(place_id)
-    max_width = request.args.get("max_width", 1600)
-    async with aiohttp.ClientSession() as session:
-        async with session.get(app.config["PICTURES_URL"], params={"photoreference":place_id, "key":app.config["API_KEY"], "maxwidth":max_width}) as resp:
-            resp_data = await resp.read()
-            return raw(resp_data)
+    params = dict(photoreference=request.args.get("place_id"),
+                  key=app.config["API_KEY"],
+                  maxwidth=request.args.get("max_width", 1600))
+    response = await QueryHandler.get(app.config["PICTURES_URL"],resp_type="read",params=params)
+    return raw(response)
+
+
+@app.route("/place_data")
+async def place_data(request):
+    params = dict(origins=f"{request.args.get('lat_1')},{request.args.get('lon_1')}",
+                  destinations=f"{request.args.get('lat_2')},{request.args.get('lon_2')}")
+    logger.info(params)
+    response = await QueryHandler.get(app.config['PLACE_META_URL'], params=params)
+    return json(response)
 
 
 async def get_places(coords, keyword, radius):
-    data = await QueryHandler.get(app.config['PLACES_URL'],
-                                  key=app.config["API_KEY"],
-                                  location="{0},{1}".format(coords.lat,coords.long),
-                                  radius=radius,
-                                  type=keyword)
+    params = dict(key=app.config["API_KEY"],
+                  location="{0},{1}".format(coords.lat,coords.long),
+                  radius=radius,
+                  type=keyword)
+    data = await QueryHandler.get(app.config['PLACES_URL'],params=params)
     return data
 
 
