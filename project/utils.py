@@ -40,13 +40,6 @@ class DistanceCalculator:
         average_distance = lambda key: sum(distances[key]) / len(distances[key])
         return sorted(distances.keys(), key=average_distance, reverse=True)[:3] # top 3 furthest points
 
-    # async def _get_zip_coords(self):
-    #     coords = await self._model_helper.execute(f"SELECT * FROM public.zip_codes WHERE public.zip_code::varchar IN ({','.join(self._zip_codes)})")
-    #     for coord in coords:
-    #         if coord:
-    #             yield coord
-
-
     async def get_zip_coords(self):
         zip_codes = []
         for zip_code in self._zip_codes:
@@ -100,7 +93,7 @@ class CenterLocator:
 
 class QueryHandler:
     @staticmethod
-    async def get(url, **kwargs):
+    async def get(url, resp_type="json", params=None):
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=kwargs) as resp:
-                return await resp.json()
+            async with session.get(url, params=params) as resp:
+                return await getattr(resp, resp_type)()
