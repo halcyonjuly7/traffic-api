@@ -1,10 +1,10 @@
 import aiohttp
 import logging
-
+from urllib.parse import urlencode
 from sanic import Sanic
 from .utils import DistanceCalculator, QueryHandler, CenterLocator
-from sanic.response import json, raw
-from sanic_cors import CORS, cross_origin
+from sanic.response import json, raw, text
+from sanic_cors import CORS
 import os
 
 config = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "dev.py")
@@ -12,7 +12,7 @@ config = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "dev
 app = Sanic(__name__)
 CORS(app)
 app.config.from_pyfile(config)
-connection = f"postgres://{app.config['DB_USERNAME']}:{app.config['DB_PASSWD']}@{app.config['DB_HOSTADDR']}/nearest"
+connection = f"postgres://{app.config['DB_USERNAME']}:{app.config['DB_PASSWD']}@{app.config['DB_HOSTADDR']}/{app.config['DB_NAME']}"
 
 logger = logging.getLogger("sanic_logger")
 
@@ -33,14 +33,17 @@ async def get_data(request):
         return json({"data": places,
                      "zip_coords":[{"zip_code":zip_coord.zip_code,
                                     "lat": zip_coord.lat,
-                                    "long": zip_coord.long} for zip_coord in zip_coords]})
+                                    "long": zip_coord.long,
+                                    "city": zip_coord.city,
+                                    "area_code": zip_coord.area_code,
+                                    "county": zip_coord.county} for zip_coord in zip_coords]})
     return json({"data": None,
                  "zip_coords": None})
 
 @app.route("/nearest/next_page", methods=["GET"])
 async def get_next(request):
     params = dict(key=app.config["API_KEY"],
-                  page_token=request.args.get("page_token"))
+                  pagetoken=request.args.get("page_token"))
     results = await QueryHandler.get(app.config['PLACES_URL'],params=params)
     return json(results)
 
@@ -58,7 +61,6 @@ async def get_photos(request):
 async def place_data(request):
     params = dict(origins=f"{request.args.get('lat_1')},{request.args.get('lon_1')}",
                   destinations=f"{request.args.get('lat_2')},{request.args.get('lon_2')}")
-    logger.info(params)
     response = await QueryHandler.get(app.config['PLACE_META_URL'], params=params)
     return json(response)
 
